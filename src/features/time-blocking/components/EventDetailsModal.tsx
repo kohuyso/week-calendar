@@ -1,4 +1,5 @@
 import { X, Clock, AlignLeft, Edit2, Trash2 } from 'lucide-react'
+import { BaseModal } from '../../../components/BaseModal'
 import type { CalendarEvent } from '../types/event.types'
 import { formatTimeRange } from '../utils/date.utils'
 
@@ -30,8 +31,12 @@ export function EventDetailsModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-3 sm:p-4 animate-in fade-in duration-150">
-      <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl border border-gray-100 overflow-hidden text-gray-800 max-h-[92vh] overflow-y-auto">
+    <BaseModal
+      isOpen={!!event}
+      onClose={onClose}
+      maxWidth="md"
+      className="overflow-y-auto"
+    >
         {/* Color bar on top */}
         <div
           style={{ backgroundColor: event.color || '#eab308' }}
@@ -109,7 +114,6 @@ export function EventDetailsModal({
             </div>
           </div>
         </div>
-      </div>
-    </div>
+    </BaseModal>
   )
 }

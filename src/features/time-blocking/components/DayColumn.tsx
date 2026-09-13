@@ -1,9 +1,10 @@
-import React, { useRef, useEffect } from 'react'
+import React, { useRef, useEffect, useMemo } from 'react'
 import type { CalendarEvent, SelectionRange } from '../types/event.types'
 import {
   HOUR_HEIGHT,
   isSameDay,
   snapToInterval,
+  computeOverlappingEventLayout,
 } from '../utils/date.utils'
 import { EventCard } from './EventCard'
 import { CurrentTimeLine } from './CurrentTimeLine'
@@ -57,42 +58,12 @@ export const DayColumn = React.memo(function DayColumn({
   const columnRef = useRef<HTMLDivElement>(null)
   const isToday = isSameDay(date, now)
   const dayEvents = events.filter((ev) => isSameDay(ev.start, date))
+  const positionedEvents = useMemo(
+    () => computeOverlappingEventLayout(dayEvents),
+    [dayEvents]
+  )
   const isSelectedHere = selectionRange?.dayIndex === dayIndex
-
-  // High-performance window tracking with requestAnimationFrame when selecting
-  useEffect(() => {
-    if (!isSelectedHere) return
-
-    let rafId: number | null = null
-
-    const handleWindowMouseMove = (e: MouseEvent) => {
-      if (!columnRef.current) return
-      if (rafId !== null) cancelAnimationFrame(rafId)
-
-      rafId = requestAnimationFrame(() => {
-        if (!columnRef.current) return
-        const rect = columnRef.current.getBoundingClientRect()
-        const offsetY = e.clientY - rect.top
-        const rawMinutes = (offsetY / HOUR_HEIGHT) * 60
-        const snappedMinutes = snapToInterval(rawMinutes, 15)
-        onUpdateSelection(snappedMinutes)
-      })
-    }
-
-    const handleWindowMouseUp = () => {
-      if (rafId !== null) cancelAnimationFrame(rafId)
-      onCompleteSelection()
-    }
-
-    window.addEventListener('mousemove', handleWindowMouseMove, { passive: true })
-    window.addEventListener('mouseup', handleWindowMouseUp)
-
-    return () => {
-      if (rafId !== null) cancelAnimationFrame(rafId)
-      window.removeEventListener('mousemove', handleWindowMouseMove)
-      window.removeEventListener('mouseup', handleWindowMouseUp)
-    }
-  }, [isSelectedHere, onUpdateSelection, onCompleteSelection])
+  const lastMouseClientYRef = useRef<number | null>(null)
 
   const calculateMinutesFromClientY = (clientY: number) => {
     if (!columnRef.current) return 0
@@ -101,6 +72,92 @@ export const DayColumn = React.memo(function DayColumn({
     const rawMinutes = (offsetY / HOUR_HEIGHT) * 60
     return snapToInterval(rawMinutes, 15)
   }
+
+  // High-performance window tracking with continuous auto-scroll when selecting
+  useEffect(() => {
+    if (!isSelectedHere) return
+
+    let autoScrollRafId: number | null = null
+    let lastCalculatedMinutes = -1
+
+    const updateSelectionFromClientY = (clientY: number) => {
+      const snappedMinutes = calculateMinutesFromClientY(clientY)
+      if (snappedMinutes !== lastCalculatedMinutes) {
+        lastCalculatedMinutes = snappedMinutes
+        onUpdateSelection(snappedMinutes)
+      }
+    }
+
+    const handleWindowMouseMove = (e: MouseEvent) => {
+      lastMouseClientYRef.current = e.clientY
+      updateSelectionFromClientY(e.clientY)
+    }
+
+    // Auto-scroll loop when mouse is near top or bottom edges of the calendar view
+    const EDGE_ZONE = 90
+    const MAX_SPEED = 24
+    const HEADER_OFFSET = 55
+
+    const autoScrollLoop = () => {
+      if (columnRef.current && lastMouseClientYRef.current !== null) {
+        const scrollContainer =
+          columnRef.current.closest<HTMLElement>('[data-calendar-scroll="true"]') ||
+          columnRef.current.closest<HTMLElement>('.overflow-auto')
+
+        if (scrollContainer) {
+          const containerRect = scrollContainer.getBoundingClientRect()
+          const clientY = lastMouseClientYRef.current
+
+          // Active viewport boundaries ensure scroll triggers even if container overflows viewport
+          const viewportBottom = Math.min(window.innerHeight, containerRect.bottom)
+          const viewportTop = Math.max(0, containerRect.top)
+          let delta = 0
+
+          if (clientY >= viewportBottom - EDGE_ZONE) {
+            // Near or past bottom edge -> scroll down
+            const overflow = clientY - (viewportBottom - EDGE_ZONE)
+            const ratio = Math.min(1, Math.max(0.2, overflow / EDGE_ZONE))
+            delta = Math.round(ratio * MAX_SPEED)
+          } else if (clientY <= viewportTop + HEADER_OFFSET + EDGE_ZONE) {
+            // Near or past top edge -> scroll up
+            const overflow = (viewportTop + HEADER_OFFSET + EDGE_ZONE) - clientY
+            const ratio = Math.min(1, Math.max(0.2, overflow / EDGE_ZONE))
+            delta = -Math.round(ratio * MAX_SPEED)
+          }
+
+          if (delta !== 0) {
+            const prevScrollTop = scrollContainer.scrollTop
+            const maxScrollTop = scrollContainer.scrollHeight - scrollContainer.clientHeight
+            scrollContainer.scrollTop = Math.max(0, Math.min(maxScrollTop, prevScrollTop + delta))
+
+            // Update selection to match the newly scrolled position
+            if (scrollContainer.scrollTop !== prevScrollTop) {
+              updateSelectionFromClientY(clientY)
+            }
+          }
+        }
+      }
+
+      autoScrollRafId = requestAnimationFrame(autoScrollLoop)
+    }
+
+    autoScrollRafId = requestAnimationFrame(autoScrollLoop)
+
+    const handleWindowMouseUp = () => {
+      if (autoScrollRafId !== null) cancelAnimationFrame(autoScrollRafId)
+      lastMouseClientYRef.current = null
+      onCompleteSelection()
+    }
+
+    window.addEventListener('mousemove', handleWindowMouseMove, { passive: true })
+    window.addEventListener('mouseup', handleWindowMouseUp)
+
+    return () => {
+      if (autoScrollRafId !== null) cancelAnimationFrame(autoScrollRafId)
+      window.removeEventListener('mousemove', handleWindowMouseMove)
+      window.removeEventListener('mouseup', handleWindowMouseUp)
+    }
+  }, [isSelectedHere, onUpdateSelection, onCompleteSelection])
 
   const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
     if (e.button !== 0) return
@@ -111,6 +168,7 @@ export const DayColumn = React.memo(function DayColumn({
       return
     }
 
+    lastMouseClientYRef.current = e.clientY
     const minutes = calculateMinutesFromClientY(e.clientY)
     onStartSelection(dayIndex, date, minutes)
   }
@@ -153,6 +211,7 @@ export const DayColumn = React.memo(function DayColumn({
   return (
     <div
       ref={columnRef}
+      data-day-column="true"
       onMouseDown={handleMouseDown}
       onDragOver={handleDragOver}
       onDrop={handleDrop}
@@ -171,11 +230,13 @@ export const DayColumn = React.memo(function DayColumn({
       {/* Real-time Indicator Line if today */}
       {isToday && <CurrentTimeLine now={now} />}
 
-      {/* Render Day Events */}
-      {dayEvents.map((ev) => (
+      {/* Existing Events Cards (Side-by-side if overlapping) */}
+      {positionedEvents.map(({ event: ev, colIndex, totalCols }) => (
         <EventCard
           key={ev.id}
           event={ev}
+          colIndex={colIndex}
+          totalCols={totalCols}
           onSelect={onSelectEvent}
           onContextMenu={onContextMenuEvent}
           onDragStart={onDragStartEvent}

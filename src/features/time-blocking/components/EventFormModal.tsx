@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { X, Calendar, Clock, AlignLeft } from 'lucide-react'
+import { BaseModal } from '../../../components/BaseModal'
 import type { CalendarEvent, NewEventPayload } from '../types/event.types'
 import { toDateTimeLocalString, parseDateTimeLocal } from '../utils/date.utils'
 
@@ -92,9 +93,13 @@ export function EventFormModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-3 sm:p-4 animate-in fade-in duration-150">
-      <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl border border-gray-100 overflow-hidden text-gray-800 max-h-[92vh] flex flex-col">
-        <div className="flex items-center justify-between p-4 sm:p-5 border-b border-gray-100 bg-gray-50/70 shrink-0">
+    <BaseModal
+      isOpen={isOpen}
+      onClose={onClose}
+      maxWidth="lg"
+      className="flex flex-col"
+    >
+      <div className="flex items-center justify-between p-4 sm:p-5 border-b border-gray-100 bg-gray-50/70 shrink-0">
           <h3 className="text-base sm:text-lg font-bold text-gray-900 flex items-center gap-2">
             <Calendar className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" />
             {initialEvent ? 'Chỉnh sửa công việc' : 'Tạo mới công việc (Time Block)'}
@@ -215,7 +220,6 @@ export function EventFormModal({
             </button>
           </div>
         </form>
-      </div>
-    </div>
+    </BaseModal>
   )
 }

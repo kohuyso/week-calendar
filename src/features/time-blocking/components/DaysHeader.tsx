@@ -11,9 +11,9 @@ export const DaysHeader = React.memo(function DaysHeader({
   timezoneLabel = 'GMT+07',
 }: DaysHeaderProps) {
   return (
-    <div className="flex border-b border-gray-200 bg-white sticky top-0 z-30 select-none w-full">
+    <div className="flex border-b border-gray-200 bg-white sticky top-0 z-40 select-none w-full shadow-xs">
       {/* Corner: Timezone Gutter - Sticky Top AND Sticky Left */}
-      <div className="w-12 sm:w-16 shrink-0 sticky left-0 z-40 bg-white flex items-center justify-center border-r border-gray-200 py-2 sm:py-3 text-[10px] sm:text-[11px] font-medium text-gray-500 shadow-xs">
+      <div className="w-12 sm:w-16 shrink-0 sticky left-0 z-50 bg-white flex items-center justify-center border-r border-gray-200 py-2 sm:py-3 text-[10px] sm:text-[11px] font-medium text-gray-500 shadow-xs">
         {timezoneLabel}
       </div>
 

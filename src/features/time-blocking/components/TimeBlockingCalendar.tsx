@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useCallback } from 'react'
 import type {
   CalendarEvent,
   NewEventPayload,
@@ -50,21 +50,20 @@ export function TimeBlockingCalendar() {
     setBaseDate(next)
   }
 
-  // Drag-to-create handlers
-  const handleStartSelection = (
-    dayIndex: number,
-    date: Date,
-    startMinutes: number
-  ) => {
-    setSelectionRange({
-      dayIndex,
-      date,
-      startMinutes,
-      endMinutes: startMinutes + 30, // Default 30-min block
-    })
-  }
+  // Drag-to-create handlers (memoized to keep references stable during drag)
+  const handleStartSelection = useCallback(
+    (dayIndex: number, date: Date, startMinutes: number) => {
+      setSelectionRange({
+        dayIndex,
+        date,
+        startMinutes,
+        endMinutes: startMinutes + 30, // Default 30-min block
+      })
+    },
+    []
+  )
 
-  const handleUpdateSelection = (endMinutes: number) => {
+  const handleUpdateSelection = useCallback((endMinutes: number) => {
     setSelectionRange((prev) => {
       if (!prev || prev.endMinutes === endMinutes) return prev
       return {
@@ -72,24 +71,26 @@ export function TimeBlockingCalendar() {
         endMinutes,
       }
     })
-  }
+  }, [])
 
-  const handleCompleteSelection = () => {
-    if (!selectionRange) return
+  const handleCompleteSelection = useCallback(() => {
+    setSelectionRange((prev) => {
+      if (!prev) return null
 
-    const rawMin = Math.min(selectionRange.startMinutes, selectionRange.endMinutes)
-    const rawMax = Math.max(selectionRange.startMinutes, selectionRange.endMinutes)
-    // Guarantee minimum 30-minute block for new event
-    const duration = Math.max(30, rawMax - rawMin)
+      const rawMin = Math.min(prev.startMinutes, prev.endMinutes)
+      const rawMax = Math.max(prev.startMinutes, prev.endMinutes)
+      // Guarantee minimum 30-minute block for new event
+      const duration = Math.max(30, rawMax - rawMin)
 
-    const start = setMinutesToDate(selectionRange.date, rawMin)
-    const end = setMinutesToDate(selectionRange.date, rawMin + duration)
+      const start = setMinutesToDate(prev.date, rawMin)
+      const end = setMinutesToDate(prev.date, rawMin + duration)
 
-    setSelectionRange(null)
-    setInitialFormDates({ start, end })
-    setEditingEvent(null)
-    setFormModalOpen(true)
-  }
+      setInitialFormDates({ start, end })
+      setEditingEvent(null)
+      setFormModalOpen(true)
+      return null
+    })
+  }, [])
 
   // Event interaction handlers
   const handleSelectEvent = (event: CalendarEvent) => {
